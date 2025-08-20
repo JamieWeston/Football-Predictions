@@ -1,0 +1,172 @@
+{
+  "generated": "2025-08-20T21:27:08.335735",
+  "league": "Premier League",
+  "season": "2024/25",
+  "predictions": [
+    {
+      "match_id": "ARS_MAN_20250820",
+      "date": "2025-08-21T21:27:08.335575",
+      "home_team": "Arsenal",
+      "away_team": "Manchester United",
+      "probabilities": {
+        "home": 0.75,
+        "draw": 0.15,
+        "away": 0.1,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 3.6
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335643"
+    },
+    {
+      "match_id": "LIV_CHE_20250820",
+      "date": "2025-08-22T23:27:08.335585",
+      "home_team": "Liverpool",
+      "away_team": "Chelsea",
+      "probabilities": {
+        "home": 0.75,
+        "draw": 0.15,
+        "away": 0.1,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 2.7
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335656"
+    },
+    {
+      "match_id": "MAN_TOT_20250820",
+      "date": "2025-08-24T01:27:08.335591",
+      "home_team": "Manchester City",
+      "away_team": "Tottenham Hotspur",
+      "probabilities": {
+        "home": 0.75,
+        "draw": 0.15,
+        "away": 0.1,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 4.05
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335667"
+    },
+    {
+      "match_id": "NEW_AST_20250820",
+      "date": "2025-08-25T03:27:08.335593",
+      "home_team": "Newcastle United",
+      "away_team": "Aston Villa",
+      "probabilities": {
+        "home": 0.519,
+        "draw": 0.111,
+        "away": 0.37,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 4.05
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335676"
+    },
+    {
+      "match_id": "BRI_FUL_20250820",
+      "date": "2025-08-22T05:27:08.335596",
+      "home_team": "Brighton & Hove Albion",
+      "away_team": "Fulham",
+      "probabilities": {
+        "home": 0.726,
+        "draw": 0.145,
+        "away": 0.129,
+        "over_25": 0.45,
+        "btts": 0.52,
+        "avg_goals": 1.8
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335685"
+    },
+    {
+      "match_id": "BRE_WOL_20250820",
+      "date": "2025-08-23T07:27:08.335598",
+      "home_team": "Brentford",
+      "away_team": "Wolverhampton Wanderers",
+      "probabilities": {
+        "home": 0.145,
+        "draw": 0.38,
+        "away": 0.475,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 2.7
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335699"
+    },
+    {
+      "match_id": "CRY_SOU_20250820",
+      "date": "2025-08-24T09:27:08.335600",
+      "home_team": "Crystal Palace",
+      "away_team": "Southampton",
+      "probabilities": {
+        "home": 0.431,
+        "draw": 0.412,
+        "away": 0.157,
+        "over_25": 0.45,
+        "btts": 0.52,
+        "avg_goals": 0.9
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335708"
+    },
+    {
+      "match_id": "EVE_NOT_20250820",
+      "date": "2025-08-25T11:27:08.335604",
+      "home_team": "Everton",
+      "away_team": "Nottingham Forest",
+      "probabilities": {
+        "home": 0.353,
+        "draw": 0.412,
+        "away": 0.235,
+        "over_25": 0.45,
+        "btts": 0.52,
+        "avg_goals": 0.9
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335717"
+    },
+    {
+      "match_id": "WES_LEI_20250820",
+      "date": "2025-08-22T13:27:08.335606",
+      "home_team": "West Ham United",
+      "away_team": "Leicester City",
+      "probabilities": {
+        "home": 0.275,
+        "draw": 0.412,
+        "away": 0.314,
+        "over_25": 0.45,
+        "btts": 0.52,
+        "avg_goals": 1.8
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335725"
+    },
+    {
+      "match_id": "BOU_IPS_20250820",
+      "date": "2025-08-23T15:27:08.335608",
+      "home_team": "Bournemouth",
+      "away_team": "Ipswich Town",
+      "probabilities": {
+        "home": 0.75,
+        "draw": 0.15,
+        "away": 0.1,
+        "over_25": 0.55,
+        "btts": 0.52,
+        "avg_goals": 2.7
+      },
+      "confidence": "medium",
+      "last_updated": "2025-08-20T21:27:08.335734"
+    }
+  ],
+  "metadata": {
+    "model_version": "1.0",
+    "matches_analyzed": 15,
+    "teams_tracked": 20
+  }
+}
