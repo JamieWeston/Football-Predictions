@@ -1,19 +1,25 @@
 import json
 import csv
-import random
+import os
 from datetime import datetime, timedelta
 from collections import defaultdict
+import random
 
 def load_matches():
     """Load historical matches"""
     matches = []
+    csv_path = os.path.join('data', 'matches.csv')
+    
     try:
-        with open('data/matches.csv', 'r') as f:
+        with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 matches.append(row)
-    except:
-        print("No data found, using defaults")
+        print(f"Loaded {len(matches)} matches from {csv_path}")
+    except Exception as e:
+        print(f"Error loading matches: {e}")
+        print("Using empty match list")
+    
     return matches
 
 def calculate_team_stats(matches):
@@ -26,7 +32,7 @@ def calculate_team_stats(matches):
     })
     
     for match in matches:
-        if match.get('home_goals') and match.get('away_goals'):
+        try:
             home = match['home_team']
             away = match['away_team']
             home_goals = int(match['home_goals'])
@@ -60,6 +66,9 @@ def calculate_team_stats(matches):
                 stats[away]['drawn'] += 1
                 stats[home]['points'] += 1
                 stats[away]['points'] += 1
+        except (KeyError, ValueError) as e:
+            print(f"Skipping match due to error: {e}")
+            continue
     
     return stats
 
@@ -104,9 +113,10 @@ def predict_match(home_team, away_team, stats):
     
     # Normalize
     total = home_prob + draw_prob + away_prob
-    home_prob /= total
-    draw_prob /= total
-    away_prob /= total
+    if total > 0:
+        home_prob /= total
+        draw_prob /= total
+        away_prob /= total
     
     # Calculate other markets
     avg_goals = 2.7  # Premier League average
@@ -131,43 +141,50 @@ def generate_upcoming_fixtures():
     """Generate next week's fixtures"""
     
     teams = [
-        'Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton',
+        'Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton & Hove Albion',
         'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Ipswich Town',
         'Leicester City', 'Liverpool', 'Manchester City', 'Manchester United',
-        'Newcastle', 'Nottingham Forest', 'Southampton', 'Tottenham',
-        'West Ham', 'Wolverhampton'
+        'Newcastle United', 'Nottingham Forest', 'Southampton', 'Tottenham Hotspur',
+        'West Ham United', 'Wolverhampton Wanderers'
     ]
     
-    # Simple fixture generation (you can replace with actual fixtures)
-    fixtures = []
-    used_teams = set()
+    # Create realistic fixtures
+    fixtures = [
+        {'home': 'Arsenal', 'away': 'Manchester United'},
+        {'home': 'Liverpool', 'away': 'Chelsea'},
+        {'home': 'Manchester City', 'away': 'Tottenham Hotspur'},
+        {'home': 'Newcastle United', 'away': 'Aston Villa'},
+        {'home': 'Brighton & Hove Albion', 'away': 'Fulham'},
+        {'home': 'Brentford', 'away': 'Wolverhampton Wanderers'},
+        {'home': 'Crystal Palace', 'away': 'Southampton'},
+        {'home': 'Everton', 'away': 'Nottingham Forest'},
+        {'home': 'West Ham United', 'away': 'Leicester City'},
+        {'home': 'Bournemouth', 'away': 'Ipswich Town'},
+    ]
     
-    for i in range(10):  # 10 matches
-        available = [t for t in teams if t not in used_teams]
-        if len(available) >= 2:
-            home = random.choice(available)
-            used_teams.add(home)
-            available.remove(home)
-            away = random.choice(available)
-            used_teams.add(away)
-            
-            match_date = datetime.now() + timedelta(days=random.randint(1, 7))
-            fixtures.append({
-                'date': match_date.isoformat(),
-                'home_team': home,
-                'away_team': away
-            })
+    # Add dates
+    result = []
+    for i, fixture in enumerate(fixtures):
+        match_date = datetime.now() + timedelta(days=(i % 4) + 1, hours=i*2)
+        result.append({
+            'date': match_date.isoformat(),
+            'home_team': fixture['home'],
+            'away_team': fixture['away']
+        })
     
-    return fixtures
+    return result
 
 def main():
     """Main prediction function"""
+    
+    print("Starting prediction generation...")
     
     # Load historical data
     matches = load_matches()
     
     # Calculate team statistics
     stats = calculate_team_stats(matches)
+    print(f"Calculated stats for {len(stats)} teams")
     
     # Add default stats for new teams
     stats['default'] = {
@@ -179,6 +196,7 @@ def main():
     
     # Get upcoming fixtures
     fixtures = generate_upcoming_fixtures()
+    print(f"Generated {len(fixtures)} fixtures")
     
     # Generate predictions
     predictions = []
@@ -215,11 +233,22 @@ def main():
         }
     }
     
-    with open('predictions.json', 'w') as f:
-        json.dump(output, f, indent=2)
+    # Save to file
+    output_path = 'predictions.json'
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
     
     print(f"Generated {len(predictions)} predictions")
-    print("Saved to predictions.json")
+    print(f"Saved to {output_path}")
+    
+    # Print sample prediction for verification
+    if predictions:
+        sample = predictions[0]
+        print(f"\nSample prediction:")
+        print(f"  {sample['home_team']} vs {sample['away_team']}")
+        print(f"  Home: {sample['probabilities']['home']:.1%}")
+        print(f"  Draw: {sample['probabilities']['draw']:.1%}")
+        print(f"  Away: {sample['probabilities']['away']:.1%}")
 
 if __name__ == '__main__':
     main()
