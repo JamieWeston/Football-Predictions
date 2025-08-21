@@ -26,7 +26,7 @@ jobs:
         API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
       run: |
         echo "Testing API connection..."
-        python -c "
+        python3 -c "
 import os
 import requests
 api_key = os.environ.get('API_KEY', '')
@@ -74,7 +74,7 @@ else:
           echo "✅ Predictions generated"
           echo "Size: $(stat -c%s predictions.json) bytes"
           echo "Content preview:"
-          python -c "
+          python3 -c "
 import json
 with open('predictions.json') as f:
     data = json.load(f)
@@ -82,7 +82,7 @@ print(f'Total predictions: {data.get(\"predictions_count\", 0)}')
 print(f'Date range: {data.get(\"date_range\", {})}')
 if data.get('predictions'):
     for p in data['predictions'][:3]:
-        print(f'{p[\"home_team\"]} vs {p[\"away_team\"]} - {p[\"competition\"]}')
+        print(f\"{p['home_team']} vs {p['away_team']} - {p['competition']}\")
           "
         fi
     
