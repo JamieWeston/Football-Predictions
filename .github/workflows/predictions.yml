@@ -2,7 +2,6 @@ name: Football Predictions
 
 on:
   schedule:
-    # Runs every day at 8 AM UTC
     - cron: '0 8 * * *'
   workflow_dispatch:  # Allows manual trigger
 
@@ -22,23 +21,57 @@ jobs:
       run: |
         pip install requests
     
+    - name: Check existing data
+      run: |
+        echo "=== Checking existing data files ==="
+        ls -la data/ || echo "No data directory"
+        if [ -f predictions.json ]; then
+          echo "=== Current predictions.json ==="
+          head -20 predictions.json
+        else
+          echo "No predictions.json found"
+        fi
+    
     - name: Fetch latest data from Football-Data.org
       env:
         API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
       run: |
-        echo "Fetching upcoming matches for 2025/26 season..."
+        echo "=== Starting data fetch ==="
         python src/fetch_data.py
+        echo "=== Data fetch complete ==="
+    
+    - name: Check fetched data
+      run: |
+        echo "=== Checking data after fetch ==="
+        python src/check_data.py || echo "Check script not found"
+        echo "=== Files in data directory ==="
+        ls -la data/
+        echo "=== First 5 lines of upcoming_matches.csv ==="
+        head -5 data/upcoming_matches.csv || echo "No upcoming matches file"
     
     - name: Generate predictions
       run: |
-        echo "Generating predictions..."
+        echo "=== Starting predictions ==="
         python src/predict.py
+        echo "=== Predictions complete ==="
+    
+    - name: Verify predictions
+      run: |
+        echo "=== Checking generated predictions ==="
+        if [ -f predictions.json ]; then
+          echo "predictions.json exists, size: $(stat -c%s predictions.json) bytes"
+          echo "First 30 lines:"
+          head -30 predictions.json
+        else
+          echo "ERROR: predictions.json was not created!"
+        fi
     
     - name: Commit predictions
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add predictions.json
-        git add data/
+        git add -A
+        git status
+        git diff --staged --stat
         git diff --quiet && git diff --staged --quiet || git commit -m "Update predictions - $(date +'%Y-%m-%d %H:%M')"
         git push
