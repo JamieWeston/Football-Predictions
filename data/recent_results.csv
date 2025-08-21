@@ -1,0 +1,11 @@
+competition_code,date,home_team,away_team,home_goals,away_goals,home_xg,away_xg,matchday
+PL,2025-08-15T19:00:00Z,Liverpool FC,AFC Bournemouth,4,2,3.9,2.1,1
+PL,2025-08-16T11:30:00Z,Aston Villa FC,Newcastle United FC,0,0,0.3,0.3,1
+PL,2025-08-16T14:00:00Z,Brighton & Hove Albion FC,Fulham FC,1,1,1.2,1.2,1
+PL,2025-08-16T14:00:00Z,Sunderland AFC,West Ham United FC,3,0,3.0,0.3,1
+PL,2025-08-16T14:00:00Z,Tottenham Hotspur FC,Burnley FC,3,0,3.0,0.3,1
+PL,2025-08-16T16:30:00Z,Wolverhampton Wanderers FC,Manchester City FC,0,4,0.3,3.9,1
+PL,2025-08-17T13:00:00Z,Nottingham Forest FC,Brentford FC,3,1,3.0,1.2,1
+PL,2025-08-17T13:00:00Z,Chelsea FC,Crystal Palace FC,0,0,0.3,0.3,1
+PL,2025-08-17T15:30:00Z,Manchester United FC,Arsenal FC,0,1,0.3,1.2,1
+PL,2025-08-18T19:00:00Z,Leeds United FC,Everton FC,1,0,1.2,0.3,1
