@@ -2,7 +2,7 @@ name: Football Predictions
 
 on:
   schedule:
-    # Runs at 8 AM UTC every day
+    # Runs every day at 8 AM UTC
     - cron: '0 8 * * *'
   workflow_dispatch:  # Allows manual trigger
 
@@ -20,15 +20,19 @@ jobs:
     
     - name: Install dependencies
       run: |
-        pip install pandas numpy scipy scikit-learn requests
+        pip install requests
     
-    - name: Fetch latest data
+    - name: Fetch latest data from Football-Data.org
       env:
         API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
-      run: python src/fetch_data.py
+      run: |
+        echo "Fetching upcoming matches for 2025/26 season..."
+        python src/fetch_data.py
     
-    - name: Run predictions
-      run: python src/predict.py
+    - name: Generate predictions
+      run: |
+        echo "Generating predictions..."
+        python src/predict.py
     
     - name: Commit predictions
       run: |
