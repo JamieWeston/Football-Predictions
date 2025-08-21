@@ -1,265 +1,253 @@
 import json
 import csv
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
+import sys
+
+# Import the advanced predictor
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from advanced_predictor import RollingFormPredictor
 
 def load_upcoming_matches():
-    """Load upcoming matches from CSV"""
+    """Load only future matches"""
     matches = []
+    today = datetime.now()
+    
     try:
         with open('data/upcoming_matches.csv', 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                matches.append(row)
-        print(f"Loaded {len(matches)} upcoming matches")
-    except Exception as e:
-        print(f"Error loading upcoming matches: {e}")
-    return matches
-
-def load_historical_matches():
-    """Load historical matches for statistics"""
-    matches = []
-    try:
-        with open('data/historical_matches.csv', 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                matches.append(row)
-        print(f"Loaded {len(matches)} historical matches")
-    except Exception as e:
-        print(f"Error loading historical matches: {e}")
-    return matches
-
-def calculate_team_stats(historical_matches, competition_code=None):
-    """Calculate team statistics from historical matches"""
-    stats = defaultdict(lambda: {
-        'played': 0, 'won': 0, 'drawn': 0, 'lost': 0,
-        'goals_for': 0, 'goals_against': 0, 'points': 0,
-        'home_wins': 0, 'home_games': 0,
-        'away_wins': 0, 'away_games': 0,
-        'recent_form': []  # Last 5 matches
-    })
-    
-    # Filter by competition if specified
-    if competition_code:
-        historical_matches = [m for m in historical_matches if m.get('competition_code') == competition_code]
-    
-    for match in historical_matches:
-        try:
-            home = match['home_team']
-            away = match['away_team']
-            home_goals = int(match['home_goals'])
-            away_goals = int(match['away_goals'])
-            
-            # Update home team
-            stats[home]['played'] += 1
-            stats[home]['home_games'] += 1
-            stats[home]['goals_for'] += home_goals
-            stats[home]['goals_against'] += away_goals
-            
-            # Update away team  
-            stats[away]['played'] += 1
-            stats[away]['away_games'] += 1
-            stats[away]['goals_for'] += away_goals
-            stats[away]['goals_against'] += home_goals
-            
-            # Results
-            if home_goals > away_goals:
-                stats[home]['won'] += 1
-                stats[home]['home_wins'] += 1
-                stats[home]['points'] += 3
-                stats[away]['lost'] += 1
-                stats[home]['recent_form'].append('W')
-                stats[away]['recent_form'].append('L')
-            elif home_goals < away_goals:
-                stats[away]['won'] += 1
-                stats[away]['away_wins'] += 1
-                stats[away]['points'] += 3
-                stats[home]['lost'] += 1
-                stats[home]['recent_form'].append('L')
-                stats[away]['recent_form'].append('W')
-            else:
-                stats[home]['drawn'] += 1
-                stats[away]['drawn'] += 1
-                stats[home]['points'] += 1
-                stats[away]['points'] += 1
-                stats[home]['recent_form'].append('D')
-                stats[away]['recent_form'].append('D')
+                # Parse match date
+                match_date = datetime.fromisoformat(row['date'].replace('Z', '+00:00'))
                 
-            # Keep only last 5 for form
-            stats[home]['recent_form'] = stats[home]['recent_form'][-5:]
-            stats[away]['recent_form'] = stats[away]['recent_form'][-5:]
-            
-        except (KeyError, ValueError) as e:
-            continue
+                # Only include if match is in the future
+                if match_date >= today:
+                    matches.append(row)
+        
+        print(f"✅ Loaded {len(matches)} upcoming matches")
+        
+        # Sort by date
+        matches.sort(key=lambda x: x['date'])
+        
+    except Exception as e:
+        print(f"❌ Error loading upcoming matches: {e}")
     
-    return stats
+    return matches
 
-def predict_match(home_team, away_team, stats, league_averages):
-    """Calculate match probabilities based on statistics"""
+def load_recent_results():
+    """Load recent match results for form calculation"""
+    results = []
     
-    # Get team statistics
-    home_stats = stats.get(home_team, None)
-    away_stats = stats.get(away_team, None)
+    # Try to load recent results with xG
+    if os.path.exists('data/recent_results.csv'):
+        try:
+            with open('data/recent_results.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    row['home_goals'] = int(row.get('home_goals', 0))
+                    row['away_goals'] = int(row.get('away_goals', 0))
+                    if row.get('home_xg'):
+                        row['home_xg'] = float(row['home_xg'])
+                    if row.get('away_xg'):
+                        row['away_xg'] = float(row['away_xg'])
+                    results.append(row)
+            print(f"✅ Loaded {len(results)} recent results")
+        except Exception as e:
+            print(f"⚠️ Error loading recent results: {e}")
     
-    # Use league averages as base
-    home_prob = league_averages['home_win_rate']
-    draw_prob = league_averages['draw_rate']
-    away_prob = league_averages['away_win_rate']
+    # Also load historical data if available
+    if os.path.exists('data/matches.csv'):
+        try:
+            with open('data/matches.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    results.append({
+                        'competition_code': 'PL',
+                        'date': row['date'],
+                        'home_team': row['home_team'],
+                        'away_team': row['away_team'],
+                        'home_goals': int(row['home_goals']),
+                        'away_goals': int(row['away_goals']),
+                        'home_xg': None,
+                        'away_xg': None
+                    })
+            print(f"✅ Added historical data for long-term stats")
+        except Exception as e:
+            print(f"⚠️ Error loading historical data: {e}")
     
-    # If we have stats for both teams, calculate based on form
-    if home_stats and away_stats and home_stats['played'] > 0 and away_stats['played'] > 0:
-        
-        # Home team strength
-        if home_stats['home_games'] > 0:
-            home_home_rate = home_stats['home_wins'] / home_stats['home_games']
-            home_prob = 0.4 * league_averages['home_win_rate'] + 0.6 * home_home_rate
-        
-        # Away team strength
-        if away_stats['away_games'] > 0:
-            away_away_rate = away_stats['away_wins'] / away_stats['away_games']
-            away_prob = 0.4 * league_averages['away_win_rate'] + 0.6 * away_away_rate
-        
-        # Overall strength difference
-        home_ppg = home_stats['points'] / home_stats['played']
-        away_ppg = away_stats['points'] / away_stats['played']
-        strength_diff = (home_ppg - away_ppg) / 3.0  # Normalize to 0-1 range
-        
-        # Adjust probabilities based on strength
-        home_prob += strength_diff * 0.15
-        away_prob -= strength_diff * 0.15
-        
-        # Recent form adjustment
-        if home_stats['recent_form']:
-            home_form_score = home_stats['recent_form'].count('W') * 3 + home_stats['recent_form'].count('D')
-            home_form_rate = home_form_score / (len(home_stats['recent_form']) * 3)
-            home_prob = 0.7 * home_prob + 0.3 * home_form_rate
-        
-        if away_stats['recent_form']:
-            away_form_score = away_stats['recent_form'].count('W') * 3 + away_stats['recent_form'].count('D')
-            away_form_rate = away_form_score / (len(away_stats['recent_form']) * 3)
-            away_prob = 0.7 * away_prob + 0.3 * away_form_rate
+    return results
+
+def get_team_recent_matches(results, team, max_matches=10):
+    """Get recent matches for a team with calculated metrics"""
+    team_matches = []
     
-    # Ensure valid probabilities
-    home_prob = max(0.05, min(0.85, home_prob))
-    away_prob = max(0.05, min(0.85, away_prob))
-    draw_prob = 1.0 - home_prob - away_prob
-    draw_prob = max(0.10, min(0.40, draw_prob))
+    for match in sorted(results, key=lambda x: x['date'], reverse=True):
+        if len(team_matches) >= max_matches:
+            break
+            
+        if match['home_team'] == team:
+            team_matches.append({
+                'date': match['date'],
+                'opponent': match['away_team'],
+                'venue': 'H',
+                'goals_for': match['home_goals'],
+                'goals_against': match['away_goals'],
+                'xg_for': match.get('home_xg'),
+                'xg_against': match.get('away_xg'),
+                'result': 'W' if match['home_goals'] > match['away_goals'] else 
+                         ('D' if match['home_goals'] == match['away_goals'] else 'L')
+            })
+        elif match['away_team'] == team:
+            team_matches.append({
+                'date': match['date'],
+                'opponent': match['home_team'],
+                'venue': 'A',
+                'goals_for': match['away_goals'],
+                'goals_against': match['home_goals'],
+                'xg_for': match.get('away_xg'),
+                'xg_against': match.get('home_xg'),
+                'result': 'W' if match['away_goals'] > match['home_goals'] else 
+                         ('D' if match['away_goals'] == match['home_goals'] else 'L')
+            })
     
-    # Normalize
-    total = home_prob + draw_prob + away_prob
-    home_prob /= total
-    draw_prob /= total
-    away_prob /= total
+    return team_matches
+
+def calculate_league_stats(results, competition_code='PL'):
+    """Calculate current league statistics"""
+    comp_matches = [m for m in results if m.get('competition_code') == competition_code]
     
-    # Calculate goal-based markets
-    if home_stats and away_stats and home_stats['played'] > 0 and away_stats['played'] > 0:
-        home_goals_avg = home_stats['goals_for'] / home_stats['played']
-        away_goals_avg = away_stats['goals_for'] / away_stats['played']
-        total_goals_avg = home_goals_avg + away_goals_avg
-        
-        over_25 = 0.65 if total_goals_avg > 2.8 else (0.50 if total_goals_avg > 2.3 else 0.35)
-        btts = 0.60 if (home_goals_avg > 1.0 and away_goals_avg > 1.0) else 0.40
-    else:
-        over_25 = league_averages['over_25_rate']
-        btts = league_averages['btts_rate']
+    if not comp_matches:
+        # Default stats
+        return {
+            'avg_goals_per_team': 1.35,
+            'avg_goals_per_match': 2.70,
+            'home_win_rate': 0.46,
+            'away_win_rate': 0.28,
+            'draw_rate': 0.26,
+            'over_25_rate': 0.52,
+            'btts_rate': 0.50
+        }
+    
+    # Calculate from recent matches (last 100)
+    recent = comp_matches[-100:] if len(comp_matches) > 100 else comp_matches
+    
+    total = len(recent)
+    home_wins = sum(1 for m in recent if m['home_goals'] > m['away_goals'])
+    away_wins = sum(1 for m in recent if m['away_goals'] > m['home_goals'])
+    draws = total - home_wins - away_wins
+    
+    total_goals = sum(m['home_goals'] + m['away_goals'] for m in recent)
+    over_25 = sum(1 for m in recent if m['home_goals'] + m['away_goals'] > 2.5)
+    btts = sum(1 for m in recent if m['home_goals'] > 0 and m['away_goals'] > 0)
     
     return {
-        'home': round(home_prob, 3),
-        'draw': round(draw_prob, 3),
-        'away': round(away_prob, 3),
-        'over_25': round(over_25, 3),
-        'btts': round(btts, 3)
+        'avg_goals_per_team': total_goals / (total * 2) if total > 0 else 1.35,
+        'avg_goals_per_match': total_goals / total if total > 0 else 2.70,
+        'home_win_rate': home_wins / total if total > 0 else 0.46,
+        'away_win_rate': away_wins / total if total > 0 else 0.28,
+        'draw_rate': draws / total if total > 0 else 0.26,
+        'over_25_rate': over_25 / total if total > 0 else 0.52,
+        'btts_rate': btts / total if total > 0 else 0.50
     }
-
-def get_league_averages(competition_code):
-    """Get typical averages for each league"""
-    # Based on historical data
-    league_defaults = {
-        'PL': {'home_win_rate': 0.46, 'draw_rate': 0.25, 'away_win_rate': 0.29, 'over_25_rate': 0.55, 'btts_rate': 0.53},
-        'BL1': {'home_win_rate': 0.45, 'draw_rate': 0.24, 'away_win_rate': 0.31, 'over_25_rate': 0.58, 'btts_rate': 0.56},
-        'SA': {'home_win_rate': 0.48, 'draw_rate': 0.26, 'away_win_rate': 0.26, 'over_25_rate': 0.52, 'btts_rate': 0.50},
-        'PD': {'home_win_rate': 0.47, 'draw_rate': 0.25, 'away_win_rate': 0.28, 'over_25_rate': 0.51, 'btts_rate': 0.49},
-        'FL1': {'home_win_rate': 0.46, 'draw_rate': 0.27, 'away_win_rate': 0.27, 'over_25_rate': 0.48, 'btts_rate': 0.47},
-        'DED': {'home_win_rate': 0.45, 'draw_rate': 0.23, 'away_win_rate': 0.32, 'over_25_rate': 0.62, 'btts_rate': 0.58},
-        'PPL': {'home_win_rate': 0.48, 'draw_rate': 0.26, 'away_win_rate': 0.26, 'over_25_rate': 0.49, 'btts_rate': 0.46},
-        'ELC': {'home_win_rate': 0.45, 'draw_rate': 0.27, 'away_win_rate': 0.28, 'over_25_rate': 0.53, 'btts_rate': 0.51},
-        'BSA': {'home_win_rate': 0.49, 'draw_rate': 0.27, 'away_win_rate': 0.24, 'over_25_rate': 0.50, 'btts_rate': 0.48},
-        'DEFAULT': {'home_win_rate': 0.46, 'draw_rate': 0.26, 'away_win_rate': 0.28, 'over_25_rate': 0.52, 'btts_rate': 0.50}
-    }
-    
-    return league_defaults.get(competition_code, league_defaults['DEFAULT'])
 
 def main():
     """Main prediction function"""
     
-    print("Starting prediction generation for 2025/26 season...")
+    print("\n" + "=" * 60)
+    print("GENERATING PREDICTIONS WITH ROLLING UPDATES")
+    print(f"Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print("=" * 60)
     
     # Load data
     upcoming_matches = load_upcoming_matches()
-    historical_matches = load_historical_matches()
+    recent_results = load_recent_results()
     
     if not upcoming_matches:
-        print("No upcoming matches found!")
+        print("❌ No upcoming matches found!")
         return
     
-    # Group predictions by competition
-    predictions_by_league = defaultdict(list)
+    # Initialize predictor
+    predictor = RollingFormPredictor()
     
-    # Process each competition
-    competitions_processed = set()
+    # Update ELO ratings with recent results
+    predictor.update_elo_ratings(recent_results)
+    
+    # Generate predictions
+    predictions = []
     
     for match in upcoming_matches:
-        comp_code = match['competition_code']
-        competitions_processed.add(comp_code)
+        # Get team recent matches
+        home_matches = get_team_recent_matches(recent_results, match['home_team'])
+        away_matches = get_team_recent_matches(recent_results, match['away_team'])
         
-        # Calculate stats for this competition
-        stats = calculate_team_stats(historical_matches, comp_code)
-        
-        # Get league averages
-        league_averages = get_league_averages(comp_code)
+        # Calculate league stats
+        league_stats = calculate_league_stats(recent_results, match.get('competition_code', 'PL'))
         
         # Generate prediction
-        probs = predict_match(
+        prediction = predictor.predict_match(
             match['home_team'],
             match['away_team'],
-            stats,
-            league_averages
+            home_matches,
+            away_matches,
+            match['date'],
+            league_stats
         )
         
-        prediction = {
+        # Determine confidence based on data availability
+        confidence = 'high' if (len(home_matches) >= 5 and len(away_matches) >= 5) else \
+                    ('medium' if (len(home_matches) >= 3 and len(away_matches) >= 3) else 'low')
+        
+        # Build prediction object
+        pred_obj = {
             'match_id': match['match_id'],
             'date': match['date'],
-            'matchday': match.get('matchday'),
+            'competition': match['competition'],
             'home_team': match['home_team'],
             'away_team': match['away_team'],
-            'probabilities': probs,
-            'competition': match['competition'],
-            'country': match['country'],
-            'season': match['season']
+            'probabilities': {
+                'home': prediction['home'],
+                'draw': prediction['draw'],
+                'away': prediction['away'],
+                'over_25': prediction['over_25'],
+                'btts': prediction['btts']
+            },
+            'confidence': confidence,
+            'metrics': {
+                'expected_goals': prediction['expected_goals'],
+                'home_form': prediction['home_form'],
+                'away_form': prediction['away_form'],
+                'home_elo': prediction['home_elo'],
+                'away_elo': prediction['away_elo']
+            }
         }
         
-        predictions_by_league[comp_code].append(prediction)
+        predictions.append(pred_obj)
     
-    # Create output
-    all_predictions = []
-    for comp_code, preds in predictions_by_league.items():
-        all_predictions.extend(preds)
+    # Sort predictions by date
+    predictions.sort(key=lambda x: x['date'])
     
-    # Sort by date
-    all_predictions.sort(key=lambda x: x['date'])
-    
-    # Save predictions
+    # Create output JSON
     output = {
         'generated': datetime.now().isoformat(),
-        'season': '2025/26',
-        'total_matches': len(all_predictions),
-        'competitions': list(competitions_processed),
-        'predictions': all_predictions,
-        'metadata': {
-            'model_version': '2.0',
-            'historical_matches_analyzed': len(historical_matches),
-            'leagues_covered': len(competitions_processed)
+        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'predictions_count': len(predictions),
+        'date_range': {
+            'from': datetime.now().strftime('%Y-%m-%d'),
+            'to': (datetime.now() + timedelta(days=14)).strftime('%Y-%m-%d')
+        },
+        'predictions': predictions,
+        'model_info': {
+            'version': '4.0-Rolling',
+            'features': [
+                'Rolling form with exponential decay',
+                'xG (expected goals) integration',
+                'Dynamic ELO ratings',
+                'Time-weighted recent performance',
+                'League-specific calibration'
+            ],
+            'update_frequency': 'Daily',
+            'prediction_window': '14 days'
         }
     }
     
@@ -267,14 +255,20 @@ def main():
     with open('predictions.json', 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     
-    print(f"\nGenerated predictions for {len(all_predictions)} matches")
-    print(f"Leagues covered: {', '.join(competitions_processed)}")
-    print("Saved to predictions.json")
+    print(f"\n✅ Generated {len(predictions)} predictions")
+    print(f"📅 Date range: {output['date_range']['from']} to {output['date_range']['to']}")
     
-    # Print summary
-    for comp_code, preds in predictions_by_league.items():
-        if preds:
-            print(f"\n{preds[0]['competition']}: {len(preds)} matches")
+    # Print summary by competition
+    comp_counts = defaultdict(int)
+    for pred in predictions:
+        comp_counts[pred['competition']] += 1
+    
+    print("\n📊 Predictions by competition:")
+    for comp, count in comp_counts.items():
+        print(f"  - {comp}: {count} matches")
+    
+    print(f"\n💾 Saved to predictions.json")
+    print("=" * 60)
 
 if __name__ == '__main__':
     main()
