@@ -3,11 +3,6 @@ import csv
 import os
 from datetime import datetime
 from collections import defaultdict
-import sys
-
-# Import the advanced model
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from advanced_model import AdvancedFootballPredictor
 
 def load_upcoming_matches():
     """Load upcoming matches from CSV"""
@@ -29,200 +24,176 @@ def load_historical_matches():
         with open('data/historical_matches.csv', 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                row['home_goals'] = int(row.get('home_goals', 0))
-                row['away_goals'] = int(row.get('away_goals', 0))
                 matches.append(row)
         print(f"Loaded {len(matches)} historical matches")
     except Exception as e:
         print(f"Error loading historical matches: {e}")
     return matches
 
-def calculate_enhanced_team_stats(historical_matches, team, competition_code=None):
-    """Calculate comprehensive team statistics"""
+def calculate_team_stats(historical_matches, competition_code=None):
+    """Calculate team statistics from historical matches"""
+    stats = defaultdict(lambda: {
+        'played': 0, 'won': 0, 'drawn': 0, 'lost': 0,
+        'goals_for': 0, 'goals_against': 0, 'points': 0,
+        'home_wins': 0, 'home_games': 0,
+        'away_wins': 0, 'away_games': 0,
+        'recent_form': []  # Last 5 matches
+    })
     
     # Filter by competition if specified
     if competition_code:
-        matches = [m for m in historical_matches if m.get('competition_code') == competition_code]
-    else:
-        matches = historical_matches
+        historical_matches = [m for m in historical_matches if m.get('competition_code') == competition_code]
     
-    stats = {
-        'played': 0,
-        'won': 0,
-        'drawn': 0,
-        'lost': 0,
-        'goals_for': 0,
-        'goals_against': 0,
-        'points': 0,
-        'home_wins': 0,
-        'home_games': 0,
-        'away_wins': 0,
-        'away_games': 0,
-        'recent_matches': [],
-        'clean_sheets': 0,
-        'failed_to_score': 0,
-        'last_match_date': None
-    }
-    
-    team_matches = []
-    
-    for match in matches:
-        is_home = match['home_team'] == team
-        is_away = match['away_team'] == team
-        
-        if not (is_home or is_away):
-            continue
+    for match in historical_matches:
+        try:
+            home = match['home_team']
+            away = match['away_team']
+            home_goals = int(match['home_goals'])
+            away_goals = int(match['away_goals'])
             
-        stats['played'] += 1
-        
-        if is_home:
-            stats['home_games'] += 1
-            goals_for = match['home_goals']
-            goals_against = match['away_goals']
-            venue = 'H'
-        else:
-            stats['away_games'] += 1
-            goals_for = match['away_goals']
-            goals_against = match['home_goals']
-            venue = 'A'
-        
-        stats['goals_for'] += goals_for
-        stats['goals_against'] += goals_against
-        
-        # Clean sheets and failed to score
-        if goals_against == 0:
-            stats['clean_sheets'] += 1
-        if goals_for == 0:
-            stats['failed_to_score'] += 1
-        
-        # Results
-        if goals_for > goals_against:
-            stats['won'] += 1
-            stats['points'] += 3
-            result = 'W'
-            if is_home:
-                stats['home_wins'] += 1
-        elif goals_for < goals_against:
-            stats['lost'] += 1
-            result = 'L'
-        else:
-            stats['drawn'] += 1
-            stats['points'] += 1
-            result = 'D'
-        
-        # Store recent match
-        stats['recent_matches'].append({
-            'date': match['date'],
-            'opponent': match['away_team'] if is_home else match['home_team'],
-            'goals_for': goals_for,
-            'goals_against': goals_against,
-            'result': result,
-            'venue': venue
-        })
-        
-        stats['last_match_date'] = match['date']
-    
-    # Sort recent matches by date and keep last 10
-    stats['recent_matches'] = sorted(stats['recent_matches'], 
-                                    key=lambda x: x['date'], 
-                                    reverse=True)[:10]
+            # Update home team
+            stats[home]['played'] += 1
+            stats[home]['home_games'] += 1
+            stats[home]['goals_for'] += home_goals
+            stats[home]['goals_against'] += away_goals
+            
+            # Update away team  
+            stats[away]['played'] += 1
+            stats[away]['away_games'] += 1
+            stats[away]['goals_for'] += away_goals
+            stats[away]['goals_against'] += home_goals
+            
+            # Results
+            if home_goals > away_goals:
+                stats[home]['won'] += 1
+                stats[home]['home_wins'] += 1
+                stats[home]['points'] += 3
+                stats[away]['lost'] += 1
+                stats[home]['recent_form'].append('W')
+                stats[away]['recent_form'].append('L')
+            elif home_goals < away_goals:
+                stats[away]['won'] += 1
+                stats[away]['away_wins'] += 1
+                stats[away]['points'] += 3
+                stats[home]['lost'] += 1
+                stats[home]['recent_form'].append('L')
+                stats[away]['recent_form'].append('W')
+            else:
+                stats[home]['drawn'] += 1
+                stats[away]['drawn'] += 1
+                stats[home]['points'] += 1
+                stats[away]['points'] += 1
+                stats[home]['recent_form'].append('D')
+                stats[away]['recent_form'].append('D')
+                
+            # Keep only last 5 for form
+            stats[home]['recent_form'] = stats[home]['recent_form'][-5:]
+            stats[away]['recent_form'] = stats[away]['recent_form'][-5:]
+            
+        except (KeyError, ValueError) as e:
+            continue
     
     return stats
 
-def calculate_league_statistics(historical_matches, competition_code):
-    """Calculate league-wide statistics"""
+def predict_match(home_team, away_team, stats, league_averages):
+    """Calculate match probabilities based on statistics"""
     
-    matches = [m for m in historical_matches if m.get('competition_code') == competition_code]
+    # Get team statistics
+    home_stats = stats.get(home_team, None)
+    away_stats = stats.get(away_team, None)
     
-    if not matches:
-        # Return defaults
-        return {
-            'home_win_rate': 0.46,
-            'draw_rate': 0.26,
-            'away_win_rate': 0.28,
-            'over_25_rate': 0.52,
-            'btts_rate': 0.50,
-            'avg_goals_per_team': 1.35,
-            'avg_goals_per_match': 2.70
-        }
+    # Use league averages as base
+    home_prob = league_averages['home_win_rate']
+    draw_prob = league_averages['draw_rate']
+    away_prob = league_averages['away_win_rate']
     
-    home_wins = sum(1 for m in matches if m['home_goals'] > m['away_goals'])
-    draws = sum(1 for m in matches if m['home_goals'] == m['away_goals'])
-    away_wins = sum(1 for m in matches if m['home_goals'] < m['away_goals'])
-    total = len(matches)
+    # If we have stats for both teams, calculate based on form
+    if home_stats and away_stats and home_stats['played'] > 0 and away_stats['played'] > 0:
+        
+        # Home team strength
+        if home_stats['home_games'] > 0:
+            home_home_rate = home_stats['home_wins'] / home_stats['home_games']
+            home_prob = 0.4 * league_averages['home_win_rate'] + 0.6 * home_home_rate
+        
+        # Away team strength
+        if away_stats['away_games'] > 0:
+            away_away_rate = away_stats['away_wins'] / away_stats['away_games']
+            away_prob = 0.4 * league_averages['away_win_rate'] + 0.6 * away_away_rate
+        
+        # Overall strength difference
+        home_ppg = home_stats['points'] / home_stats['played']
+        away_ppg = away_stats['points'] / away_stats['played']
+        strength_diff = (home_ppg - away_ppg) / 3.0  # Normalize to 0-1 range
+        
+        # Adjust probabilities based on strength
+        home_prob += strength_diff * 0.15
+        away_prob -= strength_diff * 0.15
+        
+        # Recent form adjustment
+        if home_stats['recent_form']:
+            home_form_score = home_stats['recent_form'].count('W') * 3 + home_stats['recent_form'].count('D')
+            home_form_rate = home_form_score / (len(home_stats['recent_form']) * 3)
+            home_prob = 0.7 * home_prob + 0.3 * home_form_rate
+        
+        if away_stats['recent_form']:
+            away_form_score = away_stats['recent_form'].count('W') * 3 + away_stats['recent_form'].count('D')
+            away_form_rate = away_form_score / (len(away_stats['recent_form']) * 3)
+            away_prob = 0.7 * away_prob + 0.3 * away_form_rate
     
-    over_25 = sum(1 for m in matches if m['home_goals'] + m['away_goals'] > 2.5)
-    btts = sum(1 for m in matches if m['home_goals'] > 0 and m['away_goals'] > 0)
+    # Ensure valid probabilities
+    home_prob = max(0.05, min(0.85, home_prob))
+    away_prob = max(0.05, min(0.85, away_prob))
+    draw_prob = 1.0 - home_prob - away_prob
+    draw_prob = max(0.10, min(0.40, draw_prob))
     
-    total_goals = sum(m['home_goals'] + m['away_goals'] for m in matches)
+    # Normalize
+    total = home_prob + draw_prob + away_prob
+    home_prob /= total
+    draw_prob /= total
+    away_prob /= total
+    
+    # Calculate goal-based markets
+    if home_stats and away_stats and home_stats['played'] > 0 and away_stats['played'] > 0:
+        home_goals_avg = home_stats['goals_for'] / home_stats['played']
+        away_goals_avg = away_stats['goals_for'] / away_stats['played']
+        total_goals_avg = home_goals_avg + away_goals_avg
+        
+        over_25 = 0.65 if total_goals_avg > 2.8 else (0.50 if total_goals_avg > 2.3 else 0.35)
+        btts = 0.60 if (home_goals_avg > 1.0 and away_goals_avg > 1.0) else 0.40
+    else:
+        over_25 = league_averages['over_25_rate']
+        btts = league_averages['btts_rate']
     
     return {
-        'home_win_rate': home_wins / total if total > 0 else 0.46,
-        'draw_rate': draws / total if total > 0 else 0.26,
-        'away_win_rate': away_wins / total if total > 0 else 0.28,
-        'over_25_rate': over_25 / total if total > 0 else 0.52,
-        'btts_rate': btts / total if total > 0 else 0.50,
-        'avg_goals_per_team': total_goals / (total * 2) if total > 0 else 1.35,
-        'avg_goals_per_match': total_goals / total if total > 0 else 2.70
+        'home': round(home_prob, 3),
+        'draw': round(draw_prob, 3),
+        'away': round(away_prob, 3),
+        'over_25': round(over_25, 3),
+        'btts': round(btts, 3)
     }
 
-def get_head_to_head_matches(historical_matches, home_team, away_team):
-    """Get head-to-head matches between two teams"""
-    h2h = []
+def get_league_averages(competition_code):
+    """Get typical averages for each league"""
+    # Based on historical data
+    league_defaults = {
+        'PL': {'home_win_rate': 0.46, 'draw_rate': 0.25, 'away_win_rate': 0.29, 'over_25_rate': 0.55, 'btts_rate': 0.53},
+        'BL1': {'home_win_rate': 0.45, 'draw_rate': 0.24, 'away_win_rate': 0.31, 'over_25_rate': 0.58, 'btts_rate': 0.56},
+        'SA': {'home_win_rate': 0.48, 'draw_rate': 0.26, 'away_win_rate': 0.26, 'over_25_rate': 0.52, 'btts_rate': 0.50},
+        'PD': {'home_win_rate': 0.47, 'draw_rate': 0.25, 'away_win_rate': 0.28, 'over_25_rate': 0.51, 'btts_rate': 0.49},
+        'FL1': {'home_win_rate': 0.46, 'draw_rate': 0.27, 'away_win_rate': 0.27, 'over_25_rate': 0.48, 'btts_rate': 0.47},
+        'DED': {'home_win_rate': 0.45, 'draw_rate': 0.23, 'away_win_rate': 0.32, 'over_25_rate': 0.62, 'btts_rate': 0.58},
+        'PPL': {'home_win_rate': 0.48, 'draw_rate': 0.26, 'away_win_rate': 0.26, 'over_25_rate': 0.49, 'btts_rate': 0.46},
+        'ELC': {'home_win_rate': 0.45, 'draw_rate': 0.27, 'away_win_rate': 0.28, 'over_25_rate': 0.53, 'btts_rate': 0.51},
+        'BSA': {'home_win_rate': 0.49, 'draw_rate': 0.27, 'away_win_rate': 0.24, 'over_25_rate': 0.50, 'btts_rate': 0.48},
+        'DEFAULT': {'home_win_rate': 0.46, 'draw_rate': 0.26, 'away_win_rate': 0.28, 'over_25_rate': 0.52, 'btts_rate': 0.50}
+    }
     
-    for match in historical_matches:
-        if (match['home_team'] == home_team and match['away_team'] == away_team) or \
-           (match['home_team'] == away_team and match['away_team'] == home_team):
-            h2h.append(match)
-    
-    # Sort by date, most recent first
-    return sorted(h2h, key=lambda x: x['date'], reverse=True)
-
-def calculate_confidence_level(stats_home, stats_away, h2h_matches):
-    """Calculate confidence level for prediction"""
-    
-    # Base confidence on amount of data available
-    confidence_score = 0
-    
-    # Team data availability
-    if stats_home and stats_home['played'] > 10:
-        confidence_score += 25
-    elif stats_home and stats_home['played'] > 5:
-        confidence_score += 15
-    elif stats_home and stats_home['played'] > 0:
-        confidence_score += 5
-    
-    if stats_away and stats_away['played'] > 10:
-        confidence_score += 25
-    elif stats_away and stats_away['played'] > 5:
-        confidence_score += 15
-    elif stats_away and stats_away['played'] > 0:
-        confidence_score += 5
-    
-    # Recent form data
-    if stats_home and len(stats_home.get('recent_matches', [])) >= 5:
-        confidence_score += 15
-    if stats_away and len(stats_away.get('recent_matches', [])) >= 5:
-        confidence_score += 15
-    
-    # Head-to-head data
-    if len(h2h_matches) >= 5:
-        confidence_score += 20
-    elif len(h2h_matches) >= 2:
-        confidence_score += 10
-    
-    # Convert to confidence level
-    if confidence_score >= 80:
-        return 'high'
-    elif confidence_score >= 50:
-        return 'medium'
-    else:
-        return 'low'
+    return league_defaults.get(competition_code, league_defaults['DEFAULT'])
 
 def main():
-    """Main prediction function using advanced model"""
+    """Main prediction function"""
     
-    print("Starting advanced prediction generation for 2025/26 season...")
+    print("Starting prediction generation for 2025/26 season...")
     
     # Load data
     upcoming_matches = load_upcoming_matches()
@@ -231,9 +202,6 @@ def main():
     if not upcoming_matches:
         print("No upcoming matches found!")
         return
-    
-    # Initialize advanced predictor
-    predictor = AdvancedFootballPredictor()
     
     # Group predictions by competition
     predictions_by_league = defaultdict(list)
@@ -245,59 +213,30 @@ def main():
         comp_code = match['competition_code']
         competitions_processed.add(comp_code)
         
-        # Calculate team statistics
-        home_stats = calculate_enhanced_team_stats(
-            historical_matches, match['home_team'], comp_code
-        )
-        away_stats = calculate_enhanced_team_stats(
-            historical_matches, match['away_team'], comp_code
-        )
+        # Calculate stats for this competition
+        stats = calculate_team_stats(historical_matches, comp_code)
         
-        # Calculate league statistics
-        league_stats = calculate_league_statistics(historical_matches, comp_code)
+        # Get league averages
+        league_averages = get_league_averages(comp_code)
         
-        # Get head-to-head data
-        h2h_matches = get_head_to_head_matches(
-            historical_matches, match['home_team'], match['away_team']
-        )
-        
-        # Calculate ELO ratings for this competition
-        comp_matches = [m for m in historical_matches if m.get('competition_code') == comp_code]
-        predictor.elo_ratings = predictor.calculate_elo_rating(None, comp_matches)
-        
-        # Generate advanced prediction
-        probabilities = predictor.predict_match_advanced(
+        # Generate prediction
+        probs = predict_match(
             match['home_team'],
             match['away_team'],
-            home_stats,
-            away_stats,
-            league_stats,
-            h2h_matches,
-            match['date']
+            stats,
+            league_averages
         )
         
-        # Calculate confidence level
-        confidence = calculate_confidence_level(home_stats, away_stats, h2h_matches)
-        
-        # Build prediction object
         prediction = {
             'match_id': match['match_id'],
             'date': match['date'],
             'matchday': match.get('matchday'),
             'home_team': match['home_team'],
             'away_team': match['away_team'],
-            'probabilities': probabilities,
-            'confidence': confidence,
+            'probabilities': probs,
             'competition': match['competition'],
             'country': match['country'],
-            'season': match['season'],
-            'model_factors': {
-                'home_elo': round(predictor.elo_ratings.get(match['home_team'], 1500)),
-                'away_elo': round(predictor.elo_ratings.get(match['away_team'], 1500)),
-                'home_form': home_stats['won'] / home_stats['played'] if home_stats['played'] > 0 else 0,
-                'away_form': away_stats['won'] / away_stats['played'] if away_stats['played'] > 0 else 0,
-                'h2h_matches': len(h2h_matches)
-            }
+            'season': match['season']
         }
         
         predictions_by_league[comp_code].append(prediction)
@@ -310,22 +249,6 @@ def main():
     # Sort by date
     all_predictions.sort(key=lambda x: x['date'])
     
-    # Calculate model accuracy metrics (if we had test data)
-    model_metrics = {
-        'model_version': '3.0-Advanced',
-        'features_used': [
-            'ELO ratings with goal difference multiplier',
-            'Poisson distribution for goal probabilities',
-            'Form momentum with venue weighting',
-            'Head-to-head with time decay',
-            'Fatigue and rest day factors',
-            'Bayesian adjustment with league priors',
-            'Home advantage calibration'
-        ],
-        'expected_accuracy': '68-72%',  # Typical for advanced models
-        'confidence_calibration': 'Bayesian adjusted'
-    }
-    
     # Save predictions
     output = {
         'generated': datetime.now().isoformat(),
@@ -333,12 +256,10 @@ def main():
         'total_matches': len(all_predictions),
         'competitions': list(competitions_processed),
         'predictions': all_predictions,
-        'model_info': model_metrics,
         'metadata': {
+            'model_version': '2.0',
             'historical_matches_analyzed': len(historical_matches),
-            'leagues_covered': len(competitions_processed),
-            'prediction_horizon': '7 days',
-            'last_update': datetime.now().isoformat()
+            'leagues_covered': len(competitions_processed)
         }
     }
     
@@ -346,20 +267,14 @@ def main():
     with open('predictions.json', 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
     
-    print(f"\nGenerated advanced predictions for {len(all_predictions)} matches")
+    print(f"\nGenerated predictions for {len(all_predictions)} matches")
     print(f"Leagues covered: {', '.join(competitions_processed)}")
-    print("Model features: ELO, Poisson, Form, H2H, Fatigue, Bayesian")
     print("Saved to predictions.json")
     
-    # Print summary statistics
-    high_confidence = sum(1 for p in all_predictions if p['confidence'] == 'high')
-    medium_confidence = sum(1 for p in all_predictions if p['confidence'] == 'medium')
-    low_confidence = sum(1 for p in all_predictions if p['confidence'] == 'low')
-    
-    print(f"\nConfidence distribution:")
-    print(f"  High: {high_confidence} matches")
-    print(f"  Medium: {medium_confidence} matches")
-    print(f"  Low: {low_confidence} matches")
+    # Print summary
+    for comp_code, preds in predictions_by_league.items():
+        if preds:
+            print(f"\n{preds[0]['competition']}: {len(preds)} matches")
 
 if __name__ == '__main__':
     main()
