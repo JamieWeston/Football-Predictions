@@ -1,6 +1,6 @@
 competition,competition_code,match_id,date,matchday,home_team,away_team,status
-Premier League,PL,sample_1,2025-08-23T05:12:50.665559Z,20,Arsenal,Chelsea,SCHEDULED
-Premier League,PL,sample_2,2025-08-24T05:12:50.665559Z,21,Liverpool,Manchester United,SCHEDULED
-Premier League,PL,sample_3,2025-08-25T05:12:50.665559Z,22,Manchester City,Tottenham Hotspur,SCHEDULED
-Various,OTH,sample_4,2025-08-26T05:12:50.665559Z,23,Real Madrid,Barcelona,SCHEDULED
-Various,OTH,sample_5,2025-08-27T05:12:50.665559Z,24,Bayern Munich,Borussia Dortmund,SCHEDULED
+Premier League,PL,sample_1,2025-08-23T05:14:31.530516Z,20,Arsenal,Chelsea,SCHEDULED
+Premier League,PL,sample_2,2025-08-24T05:14:31.530516Z,21,Liverpool,Manchester United,SCHEDULED
+Premier League,PL,sample_3,2025-08-25T05:14:31.530516Z,22,Manchester City,Tottenham Hotspur,SCHEDULED
+Various,OTH,sample_4,2025-08-26T05:14:31.530516Z,23,Real Madrid,Barcelona,SCHEDULED
+Various,OTH,sample_5,2025-08-27T05:14:31.530516Z,24,Bayern Munich,Borussia Dortmund,SCHEDULED
