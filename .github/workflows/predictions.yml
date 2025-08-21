@@ -2,9 +2,8 @@ name: Football Predictions
 
 on:
   schedule:
-    # Runs every day at 8 AM UTC
     - cron: '0 8 * * *'
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   predict:
@@ -20,48 +19,78 @@ jobs:
     
     - name: Install dependencies
       run: |
-        pip install requests
+        pip install requests numpy
     
-    - name: Clean old predictions
+    - name: Test API Key
+      env:
+        API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
       run: |
-        echo "🧹 Cleaning old data..."
-        # Remove predictions older than today
-        if [ -f predictions.json ]; then
-          echo "Current predictions.json will be replaced"
-        fi
+        echo "Testing API connection..."
+        python -c "
+import os
+import requests
+api_key = os.environ.get('API_KEY', '')
+if api_key:
+    print(f'API Key found: {api_key[:10]}...')
+    headers = {'X-Auth-Token': api_key}
+    response = requests.get('https://api.football-data.org/v4/competitions', headers=headers)
+    print(f'API Response: {response.status_code}')
+    if response.status_code == 200:
+        print('✅ API Key is valid!')
+    else:
+        print('❌ API Key issue:', response.text[:200])
+else:
+    print('❌ No API Key found in secrets!')
+        "
     
     - name: Fetch latest data
       env:
         API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
       run: |
-        echo "📅 Fetching matches for next 14 days..."
-        echo "Current date: $(date +'%Y-%m-%d')"
+        echo "📅 Fetching upcoming matches..."
         python src/fetch_data.py
+    
+    - name: Check fetched data
+      run: |
+        echo "📊 Checking what was fetched..."
+        if [ -f data/upcoming_matches.csv ]; then
+          echo "Upcoming matches:"
+          wc -l data/upcoming_matches.csv
+          head -10 data/upcoming_matches.csv
+        fi
+        if [ -f data/historical_matches.csv ]; then
+          echo "Historical matches:"
+          wc -l data/historical_matches.csv
+        fi
     
     - name: Generate predictions
       run: |
-        echo "🔮 Generating predictions with rolling form..."
+        echo "🔮 Generating predictions..."
         python src/predict.py
     
-    - name: Verify output
+    - name: Verify predictions
       run: |
         if [ -f predictions.json ]; then
-          echo "✅ Predictions generated successfully"
-          echo "File size: $(stat -c%s predictions.json) bytes"
-          echo ""
-          echo "Preview (first 20 lines):"
-          head -20 predictions.json
-        else
-          echo "❌ Failed to generate predictions"
-          exit 1
+          echo "✅ Predictions generated"
+          echo "Size: $(stat -c%s predictions.json) bytes"
+          echo "Content preview:"
+          python -c "
+import json
+with open('predictions.json') as f:
+    data = json.load(f)
+print(f'Total predictions: {data.get(\"predictions_count\", 0)}')
+print(f'Date range: {data.get(\"date_range\", {})}')
+if data.get('predictions'):
+    for p in data['predictions'][:3]:
+        print(f'{p[\"home_team\"]} vs {p[\"away_team\"]} - {p[\"competition\"]}')
+          "
         fi
     
     - name: Commit and push
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add predictions.json
-        git add data/
+        git add -A
         git diff --quiet && git diff --staged --quiet || (
           git commit -m "🔄 Update predictions - $(date +'%Y-%m-%d %H:%M')"
           git push
