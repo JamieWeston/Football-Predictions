@@ -1,15 +1,83 @@
-name: Advanced Premier League Predictions Test
+name: Advanced Premier League Predictions
 
 on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
   workflow_dispatch:
 
 jobs:
-  test:
+  predict:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Test
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
       run: |
-        echo "Workflow is working!"
+        pip install requests
+    
+    - name: Check API Keys
+      env:
+        RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      run: |
+        echo "Checking API keys..."
+        [ -n "$RAPIDAPI_KEY" ] && echo "✅ RapidAPI key found" || echo "❌ RapidAPI key missing"
+        [ -n "$ODDS_API_KEY" ] && echo "✅ Odds API key found" || echo "❌ Odds API key missing"
+        [ -n "$NEWS_API_KEY" ] && echo "✅ News API key found" || echo "❌ News API key missing"
+    
+    - name: Fetch All Data Sources
+      env:
+        RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
+        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      run: |
+        echo "Starting complete data collection..."
+        python src/fetch_all_data.py
+    
+    - name: Generate Advanced Predictions
+      run: |
+        echo "Generating predictions with all data..."
+        python src/predict_advanced.py
+    
+    - name: Show Results
+      run: |
+        echo "=== Enhanced Data ==="
+        if [ -f data/enhanced_fixtures.json ]; then
+          echo "Enhanced fixtures size: $(wc -c < data/enhanced_fixtures.json) bytes"
+        fi
+        echo ""
+        echo "=== Predictions Preview ==="
+        if [ -f predictions.json ]; then
+          python -c "
+import json
+with open('predictions.json') as f:
+    data = json.load(f)
+print(f'Total predictions: {data.get(\"predictions_count\", 0)}')
+if data.get('predictions'):
+    for p in data['predictions'][:2]:
+        print(f\"\n{p['home_team']} vs {p['away_team']}\")
+        print(f\"  Probabilities: H{p['probabilities']['home']:.1%} D{p['probabilities']['draw']:.1%} A{p['probabilities']['away']:.1%}\")
+        print(f\"  O2.5: {p['probabilities']['over_25']:.1%} BTTS: {p['probabilities']['btts']:.1%}\")
+        print(f\"  Confidence: {p['confidence']}\")
+        sources = p.get('data_sources', {})
+        available = [k for k,v in sources.items() if v]
+        print(f\"  Data sources: {', '.join(available)}\")"
+        fi
+    
+    - name: Commit and Push
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git diff --quiet && git diff --staged --quiet || (
+          git commit -m "🎯 Advanced PL predictions - $(date +'%Y-%m-%d')"
+          git push
+        )
