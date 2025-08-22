@@ -1,0 +1,159 @@
+name: Diagnostic Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check Repository Structure
+      run: |
+        echo "======================================"
+        echo "DIAGNOSTIC CHECK"
+        echo "======================================"
+        echo ""
+        echo "1. CURRENT DIRECTORY:"
+        pwd
+        echo ""
+        echo "2. ALL FILES IN REPOSITORY:"
+        find . -type f -name "*.py" | head -20
+        echo ""
+        echo "3. CHECK SRC DIRECTORY:"
+        if [ -d "src" ]; then
+          echo "✅ src/ directory exists"
+          echo "Contents of src/:"
+          ls -la src/
+        else
+          echo "❌ src/ directory NOT FOUND"
+        fi
+        echo ""
+        echo "4. CHECK FOR fetch_data.py:"
+        if [ -f "src/fetch_data.py" ]; then
+          echo "✅ src/fetch_data.py EXISTS"
+          echo "File size: $(wc -c < src/fetch_data.py) bytes"
+        elif [ -f "fetch_data.py" ]; then
+          echo "⚠️ fetch_data.py is in ROOT, not in src/"
+          echo "File size: $(wc -c < fetch_data.py) bytes"
+        else
+          echo "❌ fetch_data.py NOT FOUND ANYWHERE"
+        fi
+        echo ""
+        echo "5. CHECK FOR predict.py:"
+        if [ -f "src/predict.py" ]; then
+          echo "✅ src/predict.py EXISTS"
+          echo "File size: $(wc -c < src/predict.py) bytes"
+        elif [ -f "predict.py" ]; then
+          echo "⚠️ predict.py is in ROOT, not in src/"
+          echo "File size: $(wc -c < predict.py) bytes"
+        else
+          echo "❌ predict.py NOT FOUND ANYWHERE"
+        fi
+    
+    - name: Test API Key Configuration
+      env:
+        RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        RAPIDAPI_HOST: ${{ secrets.RAPIDAPI_HOST }}
+      run: |
+        echo ""
+        echo "======================================"
+        echo "API KEY CHECK"
+        echo "======================================"
+        echo ""
+        if [ -z "$RAPIDAPI_KEY" ]; then
+          echo "❌ RAPIDAPI_KEY is NOT set in GitHub Secrets"
+        else
+          echo "✅ RAPIDAPI_KEY is set"
+          echo "   Key starts with: ${RAPIDAPI_KEY:0:10}..."
+          echo "   Key length: ${#RAPIDAPI_KEY} characters"
+        fi
+        echo ""
+        if [ -z "$RAPIDAPI_HOST" ]; then
+          echo "⚠️ RAPIDAPI_HOST is NOT set (will use default)"
+        else
+          echo "✅ RAPIDAPI_HOST is set: $RAPIDAPI_HOST"
+        fi
+    
+    - name: Test Python and Dependencies
+      run: |
+        echo ""
+        echo "======================================"
+        echo "PYTHON ENVIRONMENT CHECK"
+        echo "======================================"
+        echo ""
+        echo "Python version:"
+        python --version
+        echo ""
+        echo "Installing dependencies..."
+        pip install requests
+        echo ""
+        echo "Testing imports:"
+        python -c "
+import sys
+print('Python path:', sys.path[0])
+try:
+    import requests
+    print('✅ requests module: OK')
+except:
+    print('❌ requests module: FAILED')
+        "
+    
+    - name: Test API Connection
+      env:
+        RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+      run: |
+        echo ""
+        echo "======================================"
+        echo "API CONNECTION TEST"
+        echo "======================================"
+        echo ""
+        python -c "
+import os
+import requests
+
+key = os.environ.get('RAPIDAPI_KEY', '')
+if not key:
+    print('❌ No API key available for testing')
+else:
+    print('Testing API-Football connection...')
+    headers = {
+        'X-RapidAPI-Key': key,
+        'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com'
+    }
+    try:
+        response = requests.get('https://api-football-v1.p.rapidapi.com/v3/timezone', headers=headers)
+        print(f'Response code: {response.status_code}')
+        if response.status_code == 200:
+            print('✅ API CONNECTION SUCCESSFUL!')
+            print(f'Remaining calls today: {response.headers.get(\"X-RateLimit-Remaining\", \"Unknown\")}')
+        elif response.status_code == 403:
+            print('❌ API KEY IS INVALID OR FORBIDDEN')
+        elif response.status_code == 429:
+            print('⚠️ RATE LIMIT EXCEEDED (too many calls)')
+        else:
+            print(f'❌ UNEXPECTED RESPONSE: {response.status_code}')
+            print(f'Response: {response.text[:200]}')
+    except Exception as e:
+        print(f'❌ CONNECTION ERROR: {e}')
+        "
+    
+    - name: Summary
+      run: |
+        echo ""
+        echo "======================================"
+        echo "DIAGNOSTIC SUMMARY"
+        echo "======================================"
+        echo ""
+        echo "Check the output above to see:"
+        echo "1. ✅/❌ File locations"
+        echo "2. ✅/❌ API key configuration"
+        echo "3. ✅/❌ API connection status"
+        echo ""
+        echo "NEXT STEPS:"
+        echo "- If files are missing: Push them to GitHub"
+        echo "- If files are in wrong location: Move them to src/ folder"
+        echo "- If API key missing: Add to GitHub Secrets"
+        echo "- If API connection failed: Check API key validity"
